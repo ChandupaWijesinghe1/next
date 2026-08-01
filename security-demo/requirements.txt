@@ -1,0 +1,15 @@
+passlib[bcrypt]
+bcrypt>=3.1.0,<4.1.0
+sqlalchemy
+pydantic
+pydantic-settings
+email-validator
+fastapi
+uvicorn[standard]
+PyJWT
+redis
+httpx
+arq
+boto3
+python-multipart
+stripe

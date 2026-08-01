@@ -1,0 +1,138 @@
+# Monorepo E2E workflow (use when git root is `next/`, containing next-app + security-demo).
+# If your git root is already `next-app/`, use next-app/.github/workflows/e2e.yml instead.
+
+name: E2E Tests
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: e2e-monorepo-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      CI: "true"
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+      PLAYWRIGHT_SKIP_WEBSERVER: "1"
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
+      E2E_API_URL: http://127.0.0.1:8000
+      JWT_SECRET_KEY: ci-e2e-secret-key-change-me
+      REDIS_URL: redis://127.0.0.1:6379/0
+      APP_ENV: development
+      ARQ_QUEUE_NAME: security-demo
+      ARQ_MAX_JOBS: 5
+      CORS_ORIGINS: http://127.0.0.1:3000,http://localhost:3000
+      NOTIFICATIONS_URL: http://127.0.0.1:8001
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: next-app/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install frontend dependencies
+        working-directory: next-app
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: next-app
+        run: npx playwright install --with-deps chromium firefox
+
+      - name: Build Next.js app
+        working-directory: next-app
+        run: npm run build
+
+      - name: Install and start backend API
+        working-directory: security-demo
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          printf '%s\n' \
+            "JWT_SECRET_KEY=${JWT_SECRET_KEY}" \
+            "REDIS_URL=${REDIS_URL}" \
+            "ARQ_QUEUE_NAME=${ARQ_QUEUE_NAME}" \
+            "ARQ_MAX_JOBS=${ARQ_MAX_JOBS}" \
+            "APP_ENV=${APP_ENV}" \
+            "CORS_ORIGINS=${CORS_ORIGINS}" \
+            "NOTIFICATIONS_URL=${NOTIFICATIONS_URL}" \
+            > .env
+          nohup uvicorn main:app --host 127.0.0.1 --port 8000 > /tmp/security-demo-api.log 2>&1 &
+          echo $! > /tmp/security-demo-api.pid
+
+      - name: Wait for backend readiness
+        shell: bash
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS "http://127.0.0.1:8000/docs" >/dev/null; then
+              echo "Backend is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Backend failed to become ready"
+          cat /tmp/security-demo-api.log || true
+          exit 1
+
+      - name: Start Next.js production server
+        working-directory: next-app
+        shell: bash
+        run: |
+          nohup npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/next-app.log 2>&1 &
+          echo $! > /tmp/next-app.pid
+
+      - name: Wait for frontend readiness
+        shell: bash
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS "http://127.0.0.1:3000" >/dev/null; then
+              echo "Frontend is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Frontend failed to become ready"
+          cat /tmp/next-app.log || true
+          exit 1
+
+      - name: Run Playwright E2E tests
+        working-directory: next-app
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            next-app/playwright-report
+            next-app/test-results
+          retention-days: 7
