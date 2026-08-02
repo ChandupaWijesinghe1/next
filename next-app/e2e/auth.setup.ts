@@ -22,7 +22,7 @@ setup("authenticate via API and save storage state", async ({ page, request }) =
   const tokens = await loginViaApi(request, user.email, user.password)
 
   // Open any same-origin page, then inject tokens via API login (not UI).
-  await page.goto("/login")
+  await page.goto("/login", { waitUntil: "domcontentloaded" })
   await expect(page.getByText("Sign in to WSeek")).toBeVisible()
   await page.evaluate(
     ({ accessKey, refreshKey, accessToken, refreshToken }) => {

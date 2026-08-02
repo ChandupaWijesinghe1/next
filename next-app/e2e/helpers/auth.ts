@@ -43,6 +43,41 @@ async function sleep(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/** Firefox often fails navigations that race with auth redirects. */
+async function safeGoto(page: Page, url: string) {
+  let lastError: unknown
+
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      await page.goto(url, {
+        waitUntil: "domcontentloaded",
+        timeout: 30_000,
+      })
+      return
+    } catch (error) {
+      lastError = error
+      const message = error instanceof Error ? error.message : String(error)
+      const isRetryable =
+        /NS_BINDING_ABORTED|NS_ERROR_FAILURE|ERR_ABORTED|frame was detached|Navigation interrupted/i.test(
+          message
+        )
+
+      if (!isRetryable || attempt === 4) {
+        throw error
+      }
+
+      await sleep(500 * attempt)
+      try {
+        await page.waitForLoadState("domcontentloaded", { timeout: 5_000 })
+      } catch {
+        // ignore — page may still be recovering from the aborted navigation
+      }
+    }
+  }
+
+  throw lastError
+}
+
 /** Retry auth API calls when the backend rate-limits (HTTP 429). */
 async function postAuthWithRetry(
   request: APIRequestContext,
@@ -130,7 +165,7 @@ export async function authenticatePage(
 ) {
   await registerUser(request, user)
   const tokens = await loginViaApi(request, user.email, user.password)
-  await page.goto("/login")
+  await safeGoto(page, "/login")
   await setAuthTokensOnPage(page, tokens)
   return { user, tokens }
 }
@@ -143,25 +178,37 @@ export async function ensureAuthDir() {
 
 /** If localStorage auth is missing, reload it from the saved Playwright storage state. */
 export async function ensurePageAuth(page: Page) {
-  await page.goto("/login")
-  const existing = await page.evaluate(
+  // Prefer /projects: visiting /login while already authed triggers a client redirect
+  // that races the next goto on Firefox (NS_BINDING_ABORTED / NS_ERROR_FAILURE).
+  await safeGoto(page, "/projects")
+
+  let existing = await page.evaluate(
     (key) => window.localStorage.getItem(key),
     ACCESS_TOKEN_KEY
   )
-  if (existing) return
 
-  const raw = await readFile(AUTH_STATE_PATH, "utf8")
-  const state = JSON.parse(raw) as {
-    origins: Array<{ localStorage: Array<{ name: string; value: string }> }>
-  }
-  const items = state.origins[0]?.localStorage ?? []
-  expect(items.length, "saved auth storage state is empty").toBeGreaterThan(0)
-
-  await page.evaluate((entries) => {
-    for (const entry of entries) {
-      window.localStorage.setItem(entry.name, entry.value)
+  if (!existing) {
+    const raw = await readFile(AUTH_STATE_PATH, "utf8")
+    const state = JSON.parse(raw) as {
+      origins: Array<{ localStorage: Array<{ name: string; value: string }> }>
     }
-  }, items)
+    const items = state.origins[0]?.localStorage ?? []
+    expect(items.length, "saved auth storage state is empty").toBeGreaterThan(0)
+
+    await page.evaluate((entries) => {
+      for (const entry of entries) {
+        window.localStorage.setItem(entry.name, entry.value)
+      }
+    }, items)
+
+    await safeGoto(page, "/projects")
+    existing = await page.evaluate(
+      (key) => window.localStorage.getItem(key),
+      ACCESS_TOKEN_KEY
+    )
+  }
+
+  expect(existing, "auth token missing after ensurePageAuth").toBeTruthy()
 }
 
 /** Ensure a team exists for the authenticated user. */
@@ -171,7 +218,10 @@ export async function ensureTeam(
   _request?: APIRequestContext
 ) {
   await ensurePageAuth(page)
-  await page.goto("/projects")
+  // ensurePageAuth already lands on /projects; re-goto only if we left the page.
+  if (!page.url().includes("/projects")) {
+    await safeGoto(page, "/projects")
+  }
   await expect(page.getByRole("heading", { name: "Projects" })).toBeVisible({
     timeout: 20_000,
   })
