@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from core.authorization import (
@@ -14,7 +14,7 @@ from models.user import User
 from schemas.comment import CommentCreate, CommentRead
 from schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
 from schemas.report import ReportJobResponse
-from schemas.task import TaskCreate, TaskRead, TaskUpdate
+from schemas.task import TaskCreate, TaskListResponse, TaskRead, TaskUpdate
 from schemas.team import (
     TeamCreate,
     TeamMemberCreate,
@@ -261,7 +261,10 @@ async def create_task_route(
     return task
 
 
-@teams_router.get("/{team_id}/projects/{project_id}/tasks", response_model=list[TaskRead])
+@teams_router.get(
+    "/{team_id}/projects/{project_id}/tasks",
+    response_model=TaskListResponse,
+)
 async def list_tasks_route(
     team_id: int,
     project_id: int,
@@ -269,17 +272,40 @@ async def list_tasks_route(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     _: TeamMember = Depends(require_team_member),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ):
-    cached = await get_cached_task_list(team_id, project_id)
+    cached = await get_cached_task_list(
+        team_id, project_id, limit=limit, offset=offset
+    )
     if cached is not None:
         response.headers["X-Cache"] = "HIT"
         return cached
 
-    tasks = list_tasks(db, team_id, project_id, current_user.id)
-    task_reads = [TaskRead.model_validate(task) for task in tasks]
-    await set_cached_task_list(team_id, project_id, task_reads)
+    tasks, total = list_tasks(
+        db,
+        team_id,
+        project_id,
+        current_user.id,
+        limit=limit,
+        offset=offset,
+    )
+    payload = TaskListResponse(
+        items=[TaskRead.model_validate(task) for task in tasks],
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(tasks) < total,
+    )
+    await set_cached_task_list(
+        team_id,
+        project_id,
+        limit=limit,
+        offset=offset,
+        payload=payload,
+    )
     response.headers["X-Cache"] = "MISS"
-    return task_reads
+    return payload
 
 
 @teams_router.get("/{team_id}/projects/{project_id}/tasks/{task_id}", response_model=TaskRead)

@@ -13,6 +13,7 @@ class Settings(BaseSettings): #this is a class that indicate the  form of the se
     app_env: str = "development"
     cors_origins: str = "http://127.0.0.1:8000,http://localhost:8000"
     reports_dir: str = "reports"
+    database_url: str = "sqlite:///./app.db"
     s3_bucket_name: str = "security-demo-attachments"
     s3_region: str = "us-east-1"
     s3_endpoint_url: str = ""
@@ -34,6 +35,12 @@ class Settings(BaseSettings): #this is a class that indicate the  form of the se
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    def model_post_init(self, __context) -> None:
+        url = self.notifications_url.strip().rstrip("/")
+        if url and not url.startswith(("http://", "https://")):
+            url = f"https://{url}"
+        object.__setattr__(self, "notifications_url", url)
 
 
 settings = Settings() #this is a singleton instance of the Settings class. 

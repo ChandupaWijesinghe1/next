@@ -1,5 +1,3 @@
-import json
-
 from core.cache import (
     CACHE_TTL_SECONDS,
     cache_delete,
@@ -11,8 +9,7 @@ from core.cache import (
     task_list_cache_pattern,
 )
 from schemas.project import ProjectRead
-from schemas.task import TaskRead
-
+from schemas.task import TaskListResponse
 
 async def get_cached_project(team_id: int, project_id: int) -> ProjectRead | None:#Gets a cached project.
     cached = await cache_get(project_cache_key(team_id, project_id))
@@ -37,21 +34,31 @@ async def invalidate_task_list_cache(team_id: int, project_id: int) -> None: #In
     await cache_delete_pattern(task_list_cache_pattern(team_id, project_id))
 
 
-async def get_cached_task_list(team_id: int, project_id: int) -> list[TaskRead] | None: #Gets a cached task list.
-    cached = await cache_get(task_list_cache_key(team_id, project_id))
-    if cached is None:
-        return None
-    return [TaskRead.model_validate(item) for item in json.loads(cached)]
-
-
-async def set_cached_task_list( #Sets a cached task list.
+async def get_cached_task_list(
     team_id: int,
     project_id: int,
-    tasks: list[TaskRead],
+    *,
+    limit: int,
+    offset: int,
+) -> TaskListResponse | None:
+    cached = await cache_get(
+        task_list_cache_key(team_id, project_id, limit=limit, offset=offset)
+    )
+    if cached is None:
+        return None
+    return TaskListResponse.model_validate_json(cached)
+
+
+async def set_cached_task_list(
+    team_id: int,
+    project_id: int,
+    *,
+    limit: int,
+    offset: int,
+    payload: TaskListResponse,
 ) -> None:
-    payload = json.dumps([task.model_dump() for task in tasks])
     await cache_set(
-        task_list_cache_key(team_id, project_id),
-        payload,
+        task_list_cache_key(team_id, project_id, limit=limit, offset=offset),
+        payload.model_dump_json(),
         expire_seconds=CACHE_TTL_SECONDS,
     )

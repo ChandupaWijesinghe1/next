@@ -12,8 +12,17 @@ CACHE_TTL_SECONDS = 300
 def project_cache_key(team_id: int, project_id: int) -> str:
     return f"project:{team_id}:{project_id}"  
 
-def task_list_cache_key(team_id: int, project_id: int, suffix: str = "list") -> str:
-    return f"tasks:{team_id}:{project_id}:{suffix}"#Builds a Redis key for a list of tasks, using team_id and project_id.
+def task_list_cache_key(
+    team_id: int,
+    project_id: int,
+    *,
+    limit: int | None = None,
+    offset: int | None = None,
+    suffix: str = "list",
+) -> str:
+    if limit is not None and offset is not None:
+        return f"tasks:{team_id}:{project_id}:{suffix}:{limit}:{offset}"
+    return f"tasks:{team_id}:{project_id}:{suffix}"
 
 
 def task_list_cache_pattern(team_id: int, project_id: int) -> str:

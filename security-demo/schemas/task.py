@@ -36,3 +36,13 @@ class TaskRead(BaseModel):#Task read schema.
     status: str
 
     model_config = {"from_attributes": True}
+
+
+class TaskListResponse(BaseModel):
+    """Paginated task list for lazy loading on the project page."""
+
+    items: list[TaskRead]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool

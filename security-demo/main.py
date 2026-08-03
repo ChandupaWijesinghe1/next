@@ -317,3 +317,8 @@ app.include_router(tasks_router)
 app.include_router(attachments_router)
 app.include_router(billing_router)
 app.include_router(webhooks_router)
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}

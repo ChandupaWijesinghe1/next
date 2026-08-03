@@ -2,9 +2,15 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 import models  # noqa: F401 — register all models with Base.metadata
+from core.config import settings
 from models.user import Base
 
-engine = create_engine("sqlite:///./app.db")
+engine = create_engine(
+    settings.database_url,
+    connect_args={"check_same_thread": False}
+    if settings.database_url.startswith("sqlite")
+    else {},
+)
 SessionLocal = sessionmaker(bind=engine)
 
 
@@ -15,6 +21,9 @@ def _existing_columns(conn, table: str) -> set[str]:
 
 def migrate_db() -> None:#this function is used to migrate the database.sqlite ddo not migrate like others
     """Add columns introduced after the initial schema (SQLite has no auto-migrate)."""
+    if not settings.database_url.startswith("sqlite"):
+        return
+
     with engine.begin() as conn:
         team_columns = _existing_columns(conn, "teams")
         if "subscription_status" not in team_columns:

@@ -41,9 +41,24 @@ def create_task(
     return task, assignee
 
 
-def list_tasks(db: Session, team_id: int, project_id: int, user_id: int) -> list[Task]:
+def list_tasks(
+    db: Session,
+    team_id: int,
+    project_id: int,
+    user_id: int,
+    *,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[Task], int]:
     get_project(db, team_id, project_id, user_id)
-    return db.query(Task).filter(Task.project_id == project_id).all()
+    query = (
+        db.query(Task)
+        .filter(Task.project_id == project_id)
+        .order_by(Task.id.asc())
+    )
+    total = query.count()
+    tasks = query.offset(offset).limit(limit).all()
+    return tasks, total
 
 
 def get_task(db: Session, team_id: int, project_id: int, task_id: int, user_id: int) -> Task:

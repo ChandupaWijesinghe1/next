@@ -1,0 +1,111 @@
+# Render Blueprint: API + ARQ worker + notifications (+ Redis + Postgres)
+# Deploy frontend (next-app) separately on Vercel.
+#
+# After first deploy on Render:
+# 1. Set CORS_ORIGINS on wseek-api to your Vercel URL (e.g. https://my-app.vercel.app)
+# 2. Confirm NOTIFICATIONS_URL on api/worker is https://<wseek-notifications>.onrender.com
+# 3. On Vercel set:
+#      NEXT_PUBLIC_API_URL=https://<wseek-api>.onrender.com
+#      NOTIFICATIONS_URL=https://<wseek-notifications>.onrender.com
+#
+# Notes:
+# - API uses SQLite (ephemeral on free tier — data resets on redeploy).
+# - In-app notifications work without the worker; email/report jobs need wseek-worker.
+# - Free Render services sleep when idle; first request can be slow.
+
+databases:
+  - name: wseek-notifications-db
+    plan: free
+
+services:
+  - type: keyvalue
+    name: wseek-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
+
+  - type: web
+    name: wseek-notifications
+    runtime: python
+    rootDir: notifications
+    plan: free
+    buildCommand: pip install .
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: wseek-notifications-db
+          property: connectionString
+
+  - type: web
+    name: wseek-api
+    runtime: python
+    rootDir: security-demo
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        value: sqlite:///./app.db
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: REDIS_URL
+        fromService:
+          name: wseek-redis
+          type: keyvalue
+          property: connectionString
+      - key: ARQ_QUEUE_NAME
+        value: security-demo
+      - key: ARQ_MAX_JOBS
+        value: "5"
+      - key: NOTIFICATIONS_URL
+        fromService:
+          name: wseek-notifications
+          type: web
+          property: host
+      - key: CORS_ORIGINS
+        sync: false
+
+  - type: worker
+    name: wseek-worker
+    runtime: python
+    rootDir: security-demo
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: arq workers.settings.WorkerSettings
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        value: sqlite:///./app.db
+      - key: JWT_SECRET_KEY
+        fromService:
+          name: wseek-api
+          type: web
+          envVarKey: JWT_SECRET_KEY
+      - key: REDIS_URL
+        fromService:
+          name: wseek-redis
+          type: keyvalue
+          property: connectionString
+      - key: ARQ_QUEUE_NAME
+        value: security-demo
+      - key: ARQ_MAX_JOBS
+        value: "5"
+      - key: NOTIFICATIONS_URL
+        fromService:
+          name: wseek-notifications
+          type: web
+          property: host
