@@ -3,7 +3,12 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { FormEvent, useEffect, useMemo, useState } from "react"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query"
 import { ArrowLeft, Plus, Trash2 } from "lucide-react"
 
 import {
@@ -55,6 +60,8 @@ type ProjectsDetailViewProps = {
   teamIdFromQuery: number | null
 }
 
+const TASKS_PAGE_SIZE = 10
+
 function formatBytes(size: number) {
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
@@ -105,9 +112,16 @@ export function ProjectDetailView({
     enabled: teamId != null,
   })
 
-  const tasksQuery = useQuery({
+  const tasksQuery = useInfiniteQuery({
     queryKey: queryKeys.tasks(teamId!, projectId),
-    queryFn: () => listTasks(teamId!, projectId),
+    queryFn: ({ pageParam }) =>
+      listTasks(teamId!, projectId, {
+        limit: TASKS_PAGE_SIZE,
+        offset: pageParam,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) =>
+      lastPage.has_more ? lastPage.offset + lastPage.limit : undefined,
     enabled: teamId != null,
   })
 
@@ -130,7 +144,11 @@ export function ProjectDetailView({
   })
 
   const project = projectQuery.data ?? null
-  const tasks = tasksQuery.data ?? []
+  const tasks = useMemo(
+    () => tasksQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [tasksQuery.data]
+  )
+  const tasksTotal = tasksQuery.data?.pages[0]?.total ?? tasks.length
   const members = membersQuery.data ?? []
   const users = usersQuery.data ?? []
   const currentUser = meQuery.data ?? null
@@ -726,6 +744,26 @@ export function ProjectDetailView({
           </TableBody>
         </Table>
       </div>
+
+      {tasksQuery.hasNextPage ? (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Showing {tasks.length} of {tasksTotal} tasks
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => tasksQuery.fetchNextPage()}
+            disabled={tasksQuery.isFetchingNextPage}
+          >
+            {tasksQuery.isFetchingNextPage ? "Loading…" : "Load more tasks"}
+          </Button>
+        </div>
+      ) : tasks.length > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Showing {tasks.length} of {tasksTotal} tasks
+        </p>
+      ) : null}
 
       <section className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

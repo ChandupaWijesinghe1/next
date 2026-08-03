@@ -12,6 +12,7 @@ import type {
   RegisterRequest,
   Task,
   TaskCreate,
+  TaskListResponse,
   TaskUpdate,
   Team,
   TeamMember,
@@ -207,8 +208,20 @@ export function deleteProject(teamId: number, projectId: number) {
 }
 
 // Tasks
-export function listTasks(teamId: number, projectId: number) {
-  return apiFetch<Task[]>(`/teams/${teamId}/projects/${projectId}/tasks`)
+export function listTasks(
+  teamId: number,
+  projectId: number,
+  params: { limit?: number; offset?: number } = {}
+) {
+  const limit = params.limit ?? 20
+  const offset = params.offset ?? 0
+  const search = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  })
+  return apiFetch<TaskListResponse>(
+    `/teams/${teamId}/projects/${projectId}/tasks?${search.toString()}`
+  )
 }
 
 export function getTask(teamId: number, projectId: number, taskId: number) {

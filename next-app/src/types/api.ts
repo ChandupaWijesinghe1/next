@@ -68,6 +68,14 @@ export type Task = {
   status: string
 }
 
+export type TaskListResponse = {
+  items: Task[]
+  total: number
+  limit: number
+  offset: number
+  has_more: boolean
+}
+
 export type TaskCreate = {
   title: string
   description?: string | null
