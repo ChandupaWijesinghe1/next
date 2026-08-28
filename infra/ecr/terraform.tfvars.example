@@ -1,0 +1,5 @@
+aws_region                  = "eu-north-1"
+project_name                = "wseek"
+repositories                = ["api", "notifications"]
+tagged_image_count          = 10
+untagged_image_max_age_days = 7
