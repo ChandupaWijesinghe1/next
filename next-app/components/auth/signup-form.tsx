@@ -37,11 +37,11 @@ export function SignupForm() {
       })
       return login({ email, password })
     },
-    onSuccess: (tokens) => {
+    onSuccess: (tokens) => { //redict happens in here 
       setTokens(tokens.access_token, tokens.refresh_token)
       router.replace("/")
     },
-    onError: (err) => {
+    onError: (err) => {  // error rising happens in here
       setError(
         getErrorMessage(err, "Unable to create account. Please try again.")
       )
