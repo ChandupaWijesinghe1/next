@@ -26,7 +26,7 @@ resource "aws_security_group" "alb" {
   }
 }
 
-resource "aws_security_group" "app" {
+resource "aws-security-group" "app" {
   name        = "${var.project_name}-app-sg"
   description = "ECS Fargate tasks — allow traffic from ALB only"
   vpc_id      = aws_vpc.main.id
