@@ -28,7 +28,7 @@ resource "aws_security_group" "alb" {
 
 resource "aws-security-group" "app" {
   name        = "${var.project_name}-app-sg"
-  description = "ECS Fargate tasks — allow traffic from ALB only"
+  description = "ECS Fargate tasks - allow traffic from ALB only"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -55,7 +55,7 @@ resource "aws-security-group" "app" {
 
 resource "aws_security_group" "rds" {
   name        = "${var.project_name}-rds-sg"
-  description = "Postgres — allow from app-sg only"
+  description = "Postgres - allow from app-sg only"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -80,7 +80,7 @@ resource "aws_security_group" "rds" {
 
 resource "aws_security_group" "redis" {
   name        = "${var.project_name}-redis-sg"
-  description = "Redis — allow from app-sg only"
+  description = "Redis - allow from app-sg only"
   vpc_id      = aws_vpc.main.id
 
   ingress {
