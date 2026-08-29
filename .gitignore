@@ -14,3 +14,7 @@ infra/ecr/terraform.tfvars
 infra/ecr/.terraform/
 infra/ecr/*.tfstate
 infra/ecr/*.tfstate.*
+infra/ecs/terraform.tfvars
+infra/ecs/.terraform/
+infra/ecs/*.tfstate
+infra/ecs/*.tfstate.*

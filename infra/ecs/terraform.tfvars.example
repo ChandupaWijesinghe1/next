@@ -1,0 +1,10 @@
+aws_region     = "eu-north-1"
+project_name   = "wseek"
+image_tag      = "latest"
+cpu            = 256
+memory         = 512
+desired_count  = 1
+cors_origins   = "https://next-rho-ebon.vercel.app,http://127.0.0.1:3000"
+db_username    = "wseek"
+db_name        = "wseek"
+enable_ecs_exec = true

@@ -9,10 +9,12 @@ def _get_s3_client():
     client_kwargs = {
         "service_name": "s3",
         "region_name": settings.s3_region,
-        "aws_access_key_id": settings.aws_access_key_id,
-        "aws_secret_access_key": settings.aws_secret_access_key,
         "config": Config(signature_version="s3v4"),
     }
+    # Prefer explicit keys (local MinIO); otherwise use default chain (ECS task role).
+    if settings.aws_access_key_id and settings.aws_secret_access_key:
+        client_kwargs["aws_access_key_id"] = settings.aws_access_key_id
+        client_kwargs["aws_secret_access_key"] = settings.aws_secret_access_key
     if settings.s3_endpoint_url:
         client_kwargs["endpoint_url"] = settings.s3_endpoint_url
     return boto3.client(**client_kwargs)
