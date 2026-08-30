@@ -7,4 +7,13 @@ desired_count  = 1
 cors_origins   = "https://next-rho-ebon.vercel.app,http://127.0.0.1:3000"
 db_username    = "wseek"
 db_name        = "wseek"
-enable_ecs_exec = true
+acm_certificate_arn = ""
+# Optional later (same region as ALB):
+# acm_certificate_arn = "arn:aws:acm:eu-north-1:ACCOUNT:certificate/UUID"
+
+autoscaling_min_capacity        = 1
+autoscaling_max_capacity        = 4
+autoscaling_cpu_target          = 70
+autoscaling_scale_out_cooldown  = 60
+autoscaling_scale_in_cooldown   = 300
+enable_load_test_endpoint       = true

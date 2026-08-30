@@ -7,16 +7,29 @@ output "service_name" {
 }
 
 output "alb_dns_name" {
-  description = "Public ALB DNS — use as API base URL"
+  description = "Public ALB DNS name"
   value       = aws_lb.main.dns_name
 }
 
+output "alb_security_group_id" {
+  description = "alb-sg id (wseek-alb-sg)"
+  value       = aws_security_group.alb.id
+}
+
+output "target_group_arn" {
+  value = aws_lb_target_group.api.arn
+}
+
+output "https_enabled" {
+  value = local.https_enabled
+}
+
 output "api_url" {
-  value = "http://${aws_lb.main.dns_name}"
+  value = "${local.api_scheme}://${aws_lb.main.dns_name}"
 }
 
 output "health_url" {
-  value = "http://${aws_lb.main.dns_name}/health"
+  value = "${local.api_scheme}://${aws_lb.main.dns_name}/health"
 }
 
 output "ecr_image" {
@@ -55,19 +68,31 @@ output "ssm_jwt_parameter" {
   value = aws_ssm_parameter.jwt.name
 }
 
+output "autoscaling_target_id" {
+  value = aws_appautoscaling_target.api.resource_id
+}
+
+output "autoscaling_cpu_target" {
+  value = var.autoscaling_cpu_target
+}
+
+output "autoscaling_capacity" {
+  value = {
+    min = var.autoscaling_min_capacity
+    max = var.autoscaling_max_capacity
+  }
+}
+
 output "verify_commands" {
-  description = "Commands to verify healthy task + connectivity"
+  description = "Commands to verify ALB + healthy task"
   value       = <<-EOT
-    # 1. Health via ALB
-    curl http://${aws_lb.main.dns_name}/health
+    # Health via ALB
+    curl ${local.api_scheme}://${aws_lb.main.dns_name}/health
 
-    # 2. List running tasks
-    aws ecs list-tasks --cluster ${aws_ecs_cluster.main.name} --service-name ${aws_ecs_service.api.name} --region ${var.aws_region}
+    # Target health
+    aws elbv2 describe-target-health --target-group-arn ${aws_lb_target_group.api.arn} --region ${var.aws_region}
 
-    # 3. CloudWatch logs (RDS/Redis/S3 activity)
-    aws logs tail ${aws_cloudwatch_log_group.api.name} --follow --region ${var.aws_region}
-
-    # 4. ECS Exec into the task (replace TASK_ID)
-    aws ecs execute-command --cluster ${aws_ecs_cluster.main.name} --task TASK_ID --container api --interactive --command "/bin/sh" --region ${var.aws_region}
+    # E2E script
+    powershell -File scripts/verify-alb-e2e.ps1 -BaseUrl ${local.api_scheme}://${aws_lb.main.dns_name}
   EOT
 }

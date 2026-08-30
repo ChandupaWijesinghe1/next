@@ -67,6 +67,7 @@ resource "aws_ecs_task_definition" "api" {
         { name = "ARQ_QUEUE_NAME", value = "security-demo" },
         { name = "NOTIFICATIONS_URL", value = "http://127.0.0.1:8001" },
         { name = "AWS_DEFAULT_REGION", value = var.aws_region },
+        { name = "ENABLE_LOAD_TEST", value = var.enable_load_test_endpoint ? "true" : "false" },
       ]
 
       # Secrets from Secrets Manager (JWT + DB password / full DATABASE_URL)

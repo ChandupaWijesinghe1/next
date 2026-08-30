@@ -13,6 +13,14 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -26,7 +34,7 @@ resource "aws_security_group" "alb" {
   }
 }
 
-resource "aws-security-group" "app" {
+resource "aws_security_group" "app" {
   name        = "${var.project_name}-app-sg"
   description = "ECS Fargate tasks - allow traffic from ALB only"
   vpc_id      = aws_vpc.main.id

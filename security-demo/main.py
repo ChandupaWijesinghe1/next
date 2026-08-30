@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, FastAPI, Request, status
+import os
+import time
+
+from fastapi import APIRouter, Depends, FastAPI, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -322,3 +325,19 @@ app.include_router(webhooks_router)
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+def _load_test_enabled() -> bool:
+    return os.getenv("ENABLE_LOAD_TEST", "").lower() in ("1", "true", "yes")
+
+
+if _load_test_enabled():
+
+    @app.get("/load-test")
+    def load_test(duration: int = Query(default=30, ge=1, le=120)) -> dict[str, int | str]:
+        """CPU burn endpoint for ECS autoscaling demos (disabled unless ENABLE_LOAD_TEST=true)."""
+        end = time.time() + duration
+        checksum = 0
+        while time.time() < end:
+            checksum += sum(i * i for i in range(10_000))
+        return {"status": "done", "duration": duration, "checksum": checksum}
